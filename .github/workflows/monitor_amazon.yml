@@ -1,0 +1,31 @@
+name: Monitor Amazon MX - SI Digital
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+jobs:
+  monitoreo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar librerias
+        run: |
+          pip install python-amazon-sp-api openpyxl google-api-python-client google-auth
+
+      - name: Correr monitoreo
+        env:
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          LWA_APP_ID: ${{ secrets.LWA_APP_ID }}
+          LWA_CLIENT_SECRET: ${{ secrets.LWA_CLIENT_SECRET }}
+          SELLER_ID: ${{ secrets.SELLER_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: python monitor_amazon_github.py
