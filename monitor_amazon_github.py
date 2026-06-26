@@ -1,25 +1,26 @@
 # -*- coding: utf-8 -*-
 # ============================================================
-#  MONITOR AMAZON MX - SI DIGITAL v6 GitHub Actions
-#  Corre en GitHub Actions, guarda Excel en Google Drive
+#  MONITOR AMAZON MX - SI DIGITAL v7 GitHub Actions
+#  Corre en GitHub Actions, manda Excel por correo
 # ============================================================
 
-import os, time, json, base64, tempfile
+import os, time, json, base64, smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
 from datetime import datetime
 from openpyxl import load_workbook
 from sp_api.api import Products, CatalogItems
 from sp_api.base import Marketplaces
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
-from google.oauth2.service_account import Credentials
 
-# ── Credenciales desde variables de entorno (GitHub Secrets) ─────────────
 REFRESH_TOKEN     = os.environ["REFRESH_TOKEN"]
 LWA_APP_ID        = os.environ["LWA_APP_ID"]
 LWA_CLIENT_SECRET = os.environ["LWA_CLIENT_SECRET"]
 MI_SELLER_ID      = os.environ["SELLER_ID"]
-GOOGLE_CREDS_B64  = os.environ["GOOGLE_CREDENTIALS"]
-DRIVE_FOLDER_ID   = "1s3l0TqfwmjNxSczOU1C3_pI5EykqAgrv"
+GMAIL_USER        = os.environ["GMAIL_USER"]
+GMAIL_PASSWORD    = os.environ["GMAIL_PASSWORD"]
+CORREO_DESTINO    = "roberto.flores@sidigital.com.mx"
 ARCHIVO_EXCEL     = "Analisis_Amazon_SIDigital.xlsx"
 ESPERA            = 5
 
@@ -63,19 +64,16 @@ def get_offers(asin):
             p = r.payload or {}
             summary = p.get("Summary", {})
             offers  = p.get("Offers", [])
-
             num_off = None
             for c in summary.get("NumberOfOffers", []):
                 if c.get("condition") == "new":
                     num_off = c.get("OfferCount")
             if num_off is None:
                 num_off = len(offers)
-
             bb_price = None
             for bb in summary.get("BuyBoxPrices", []):
                 bb_price = num(bb.get("ListingPrice", {}).get("Amount"))
                 break
-
             bb_seller_id = "Sin dato"
             yo_bb = "No"
             precios = []
@@ -99,12 +97,10 @@ def get_offers(asin):
                     "logistica": logistica, "calif": calif,
                     "es_bb": "Sí" if es_bb else "No", "seller_id": sid,
                 })
-
             p_min = min(precios) if precios else None
             p_max = max(precios) if precios else None
             if bb_price is None and precios:
                 bb_price = min(precios)
-
             return ("OK", {
                 "bb_price": bb_price, "min": p_min, "max": p_max,
                 "num": num_off, "bb_seller_id": bb_seller_id, "yo_bb": yo_bb,
@@ -141,37 +137,39 @@ def get_catalog(asin):
     except Exception as e:
         return ("ERROR", str(e)[:60])
 
-def upload_to_drive(filepath, filename):
-    """Sube el Excel a Google Drive, reemplaza si ya existe."""
-    creds_json = base64.b64decode(GOOGLE_CREDS_B64).decode("utf-8")
-    creds_dict = json.loads(creds_json)
-    creds = Credentials.from_service_account_info(
-        creds_dict,
-        scopes=["https://www.googleapis.com/auth/drive"]
-    )
-    service = build("drive", "v3", credentials=creds)
+def enviar_correo(archivo, ok, sindato, noencontrado, ahora):
+    msg = MIMEMultipart()
+    msg["From"]    = GMAIL_USER
+    msg["To"]      = CORREO_DESTINO
+    msg["Subject"] = f"Monitor Amazon MX — SI Digital [{ahora}]"
 
-    # Buscar si ya existe el archivo
-    results = service.files().list(
-        q=f"name='{filename}' and '{DRIVE_FOLDER_ID}' in parents and trashed=false",
-        fields="files(id, name)"
-    ).execute()
-    files = results.get("files", [])
+    cuerpo = f"""Hola Roberto,
 
-    media = MediaFileUpload(filepath,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+Aquí está el reporte semanal de monitoreo de precios Amazon MX.
 
-    if files:
-        # Actualizar existente
-        file_id = files[0]["id"]
-        service.files().update(fileId=file_id, media_body=media).execute()
-        print(f"Drive: archivo actualizado (ID: {file_id})")
-    else:
-        # Crear nuevo
-        metadata = {"name": filename, "parents": [DRIVE_FOLDER_ID]}
-        service.files().create(body=metadata, media_body=media,
-                               fields="id").execute()
-        print(f"Drive: archivo creado nuevo")
+Resumen de esta corrida:
+- Productos consultados: {ok + sindato + noencontrado}
+- Con precio OK: {ok}
+- Sin dato / revisar: {sindato}
+- ASIN inválidos en MX: {noencontrado}
+
+El archivo actualizado va adjunto.
+
+— Sistema automático SI Digital
+"""
+    msg.attach(MIMEText(cuerpo, "plain"))
+
+    with open(archivo, "rb") as f:
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(f.read())
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f'attachment; filename="Analisis_Amazon_SIDigital.xlsx"')
+        msg.attach(part)
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(GMAIL_USER, GMAIL_PASSWORD)
+        server.sendmail(GMAIL_USER, CORREO_DESTINO, msg.as_string())
+    print(f"Correo enviado a {CORREO_DESTINO}")
 
 def main():
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -243,7 +241,6 @@ def main():
                           else f"Subió ${bb-ant:,.2f}" if bb > ant else "Sin cambio")
                 alerta = ("✅ Tienes Buy Box" if yo_bb == "Si"
                           else "🔴 Sin Buy Box" if num_v else "⚪ Sin competencia")
-
                 safe_set(ws1, row, H1["Estado"],           "Activo")
                 safe_set(ws1, row, H1["Buy Box ($)"],      bb)
                 safe_set(ws1, row, H1["Precio mín ($)"],   d["min"])
@@ -256,11 +253,9 @@ def main():
                 safe_set(ws1, row, H1["Estatus"],          "OK")
                 safe_set(ws1, row, H1["Alerta"],           alerta)
                 safe_set(ws1, row, H1["Notas"],            f"{num_v} vendedor(es)")
-
                 if costo and num(costo):
                     safe_set(ws1, row, H1.get("Margen sug (%)", 14),
                              round((sug - num(costo)) / sug, 4))
-
                 if precio_pub and bb:
                     dif_pct = round((num(precio_pub) - bb) / bb, 4)
                     comp = "Sí" if abs(dif_pct) <= 0.05 else "No"
@@ -277,7 +272,6 @@ def main():
                     safe_set(ws5, row, H5.get("Precio máx mercado ($)", 13), d["max"])
                     safe_set(ws5, row, H5.get("# Vendedores", 14), num_v)
                     safe_set(ws5, row, H5.get("Acción recomendada", 15), accion)
-
                 for v in d["vendedores"]:
                     safe_set(ws2, fila_comp, 1, asin)
                     safe_set(ws2, fila_comp, 2, str(nombre)[:30])
@@ -291,7 +285,6 @@ def main():
                     safe_set(ws2, fila_comp, 10, ahora)
                     safe_set(ws2, fila_comp, 11, v["seller_id"])
                     fila_comp += 1
-
                 safe_set(ws3, row, H3.get("Elegible BB", 6), "Sin dato")
                 safe_set(ws3, row, H3.get("Fecha revisión", 10), ahora)
                 ok_count += 1
@@ -320,8 +313,8 @@ def main():
 
     wb.save(salida)
     print(f"\nArchivo guardado: {salida}")
-    print("Subiendo a Google Drive...")
-    upload_to_drive(salida, "Analisis_Amazon_SIDigital.xlsx")
+    print("Enviando correo...")
+    enviar_correo(salida, ok_count, sindato, noencontrado, ahora)
 
     print("\n" + "="*55)
     print(f"Con precio (OK):      {ok_count}")
