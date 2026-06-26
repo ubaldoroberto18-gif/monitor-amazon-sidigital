@@ -19,7 +19,7 @@ jobs:
 
       - name: Instalar librerias
         run: |
-          pip install python-amazon-sp-api openpyxl google-api-python-client google-auth
+          pip install python-amazon-sp-api openpyxl
 
       - name: Correr monitoreo
         env:
@@ -27,5 +27,6 @@ jobs:
           LWA_APP_ID: ${{ secrets.LWA_APP_ID }}
           LWA_CLIENT_SECRET: ${{ secrets.LWA_CLIENT_SECRET }}
           SELLER_ID: ${{ secrets.SELLER_ID }}
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
         run: python monitor_amazon_github.py
