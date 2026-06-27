@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Monitor Amazon — SI Digital</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #1a1d27;
+    --border:    #2a2d3a;
+    --accent:    #FF6B35;
+    --accent2:   #FFB347;
+    --green:     #2DD4A0;
+    --red:       #FF4D6A;
+    --text:      #E8EAF0;
+    --muted:     #6B7280;
+    --mono:      'JetBrains Mono', monospace;
+    --sans:      'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .logo {
+    width: 40px; height: 40px;
+    background: var(--accent);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .header-text h1 {
+    font-size: 18px; font-weight: 700; letter-spacing: -0.3px;
+  }
+  .header-text p {
+    font-size: 12px; color: var(--muted); font-family: var(--mono);
+  }
+
+  /* TOKEN BANNER */
+  .token-banner {
+    background: #1a1200;
+    border: 1px solid #FFB34740;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .token-banner .icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+  .token-banner p { font-size: 13px; color: var(--accent2); line-height: 1.5; }
+  .token-banner input {
+    width: 100%;
+    margin-top: 10px;
+    background: #0f0d00;
+    border: 1px solid #FFB34750;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent2);
+    outline: none;
+  }
+  .token-banner input:focus { border-color: var(--accent2); }
+
+  /* STATUS CARD */
+  .status-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .status-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .status-text { font-size: 14px; font-weight: 500; }
+  .last-run {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* SECTION */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title span { font-size: 16px; }
+
+  /* DAYS */
+  .days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .day-btn {
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    background: transparent;
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .day-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .day-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    font-weight: 600;
+  }
+
+  /* TIME */
+  .time-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .time-row label { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+  .time-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+    width: 130px;
+  }
+  .time-input:focus { border-color: var(--accent); }
+  .tz-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
+
+  /* CRON PREVIEW */
+  .cron-preview {
+    margin-top: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cron-label { color: var(--muted); font-size: 10px; }
+
+  /* BUTTONS */
+  .btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: none;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #e55a28; }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    margin-top: 10px;
+  }
+  .btn-secondary:hover { border-color: var(--green); color: var(--green); }
+  .btn-run {
+    background: var(--green);
+    color: #0a1a14;
+    margin-top: 0;
+  }
+  .btn-run:hover { background: #25b889; }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: transform 0.3s ease;
+    z-index: 100;
+    white-space: nowrap;
+    max-width: 90vw;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+  .toast.info { border-color: var(--accent); color: var(--accent); }
+
+  /* DIVIDER */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 16px 0;
+  }
+
+  /* SPINNER */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* FOOTER */
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 32px;
+    font-family: var(--mono);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">📦</div>
+  <div class="header-text">
+    <h1>Monitor Amazon MX</h1>
+    <p>SI Digital · Panel de control</p>
+  </div>
+</div>
+
+<!-- TOKEN -->
+<div class="token-banner">
+  <div class="icon">🔑</div>
+  <div style="width:100%">
+    <p>Pega tu GitHub Personal Access Token para que el panel pueda guardar cambios en el repo.</p>
+    <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+  </div>
+</div>
+
+<!-- STATUS -->
+<div class="status-card">
+  <div class="status-label">Estado del sistema</div>
+  <div class="status-row">
+    <div class="status-dot"></div>
+    <div class="status-text" id="statusText">Activo — corre cada lunes</div>
+  </div>
+  <div class="last-run" id="lastRun">Cargando último monitoreo...</div>
+</div>
+
+<!-- PROGRAMAR -->
+<div class="section">
+  <div class="section-title"><span>📅</span> Días de monitoreo</div>
+  <div class="days-grid">
+    <button class="day-btn active" data-day="1">Lu</button>
+    <button class="day-btn" data-day="2">Ma</button>
+    <button class="day-btn" data-day="3">Mi</button>
+    <button class="day-btn" data-day="4">Ju</button>
+    <button class="day-btn" data-day="5">Vi</button>
+    <button class="day-btn" data-day="6">Sá</button>
+    <button class="day-btn" data-day="0">Do</button>
+  </div>
+
+  <div class="time-row">
+    <label>Hora:</label>
+    <input type="time" class="time-input" id="timeInput" value="08:00" />
+    <span class="tz-label">México CDMX</span>
+  </div>
+
+  <div class="cron-preview">
+    <div>
+      <div class="cron-label">CRON expression (UTC)</div>
+      <div id="cronDisplay">0 14 * * 1</div>
+    </div>
+    <div style="font-size:10px; color: var(--muted)">UTC−6</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <button class="btn btn-primary" id="btnGuardar" onclick="guardarHorario()">
+    <div class="spinner" id="spinGuardar"></div>
+    <span id="lblGuardar">💾 Guardar horario</span>
+  </button>
+</div>
+
+<!-- CORRER AHORA -->
+<div class="section">
+  <div class="section-title"><span>⚡</span> Ejecución manual</div>
+  <p style="font-size:13px; color:var(--muted); margin-bottom:14px; line-height:1.5">
+    Dispara el monitoreo ahora mismo sin esperar el horario programado.
+  </p>
+  <button class="btn btn-run" id="btnCorrer" onclick="correrAhora()">
+    <div class="spinner" id="spinCorrer" style="border-top-color:#0a1a14; border-color:rgba(0,0,0,0.2)"></div>
+    <span id="lblCorrer">▶ Correr ahora</span>
+  </button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="footer">
+  monitor-amazon-sidigital · ubaldoroberto18-gif<br>
+  <span id="footerTime"></span>
+</div>
+
+<script>
+const REPO  = "ubaldoroberto18-gif/monitor-amazon-sidigital";
+const WORKFLOW_FILE = ".github/workflows/monitor_amazon.yml";
+
+// ─── Días seleccionados ───────────────────────────────────────
+let diasActivos = new Set([1]); // Lunes por default
+
+document.querySelectorAll('.day-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const d = parseInt(btn.dataset.day);
+    if (diasActivos.has(d)) {
+      if (diasActivos.size === 1) return; // mínimo 1 día
+      diasActivos.delete(d);
+      btn.classList.remove('active');
+    } else {
+      diasActivos.add(d);
+      btn.classList.add('active');
+    }
+    actualizarCron();
+  });
+});
+
+document.getElementById('timeInput').addEventListener('change', actualizarCron);
+
+// ─── Conversión hora México → UTC ────────────────────────────
+function mxToUTC(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  let utcH = h + 6; // UTC-6 México
+  if (utcH >= 24) utcH -= 24;
+  return { h: utcH, m };
+}
+
+// ─── Generar cron expression ─────────────────────────────────
+function actualizarCron() {
+  const time = document.getElementById('timeInput').value || "08:00";
+  const { h, m } = mxToUTC(time);
+  const dias = [...diasActivos].sort((a,b)=>a-b);
+  const diasCron = dias.join(',');
+  const cron = `${m} ${h} * * ${diasCron}`;
+  document.getElementById('cronDisplay').textContent = cron;
+  return cron;
+}
+
+// ─── Token helper ─────────────────────────────────────────────
+function getToken() {
+  return document.getElementById('tokenInput').value.trim();
+}
+
+// ─── Toast ────────────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ─── Loading state ────────────────────────────────────────────
+function setLoading(btnId, spinId, lblId, loading) {
+  document.getElementById(btnId).disabled = loading;
+  document.getElementById(spinId).style.display = loading ? 'block' : 'none';
+  document.getElementById(lblId).style.display = loading ? 'none' : 'inline';
+}
+
+// ─── Guardar horario en GitHub ────────────────────────────────
+async function guardarHorario() {
+  const token = getToken();
+  if (!token) { showToast('⚠️ Primero pega tu token de GitHub', 'error'); return; }
+
+  setLoading('btnGuardar', 'spinGuardar', 'lblGuardar', true);
+  showToast('Leyendo workflow actual...', 'info');
+
+  try {
+    const cron = actualizarCron();
+
+    // 1. Obtener archivo actual
+    const res = await fetch(`https://api.github.com/repos/${REPO}/contents/${WORKFLOW_FILE}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) throw new Error(`Error ${res.status}: No se pudo leer el workflow`);
+    const data = await res.json();
+    const sha  = data.sha;
+    const contenidoActual = atob(data.content.replace(/\n/g,''));
+
+    // 2. Reemplazar línea cron
+    const nuevoContenido = contenidoActual.replace(
+      /- cron: '[^']*'/,
+      `- cron: '${cron}'`
+    );
+
+    if (nuevoContenido === contenidoActual) {
+      showToast('⚠️ No se encontró la línea cron en el workflow', 'error');
+      setLoading('btnGuardar', 'spinGuardar', 'lblGuardar', false);
+      return;
+    }
+
+    // 3. Subir cambio
+    const putRes = await fetch(`https://api.github.com/repos/${REPO}/contents/${WORKFLOW_FILE}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Panel: actualizar horario → ${cron}`,
+        content: btoa(unescape(encodeURIComponent(nuevoContenido))),
+        sha
+      })
+    });
+
+    if (!putRes.ok) {
+      const err = await putRes.json();
+      throw new Error(err.message || `Error ${putRes.status}`);
+    }
+
+    showToast('✅ Horario guardado en GitHub', 'success');
+    document.getElementById('statusText').textContent = `Activo — cron: ${cron}`;
+  } catch(e) {
+    showToast(`❌ ${e.message}`, 'error');
+    console.error(e);
+  }
+
+  setLoading('btnGuardar', 'spinGuardar', 'lblGuardar', false);
+}
+
+// ─── Correr ahora (workflow_dispatch) ─────────────────────────
+async function correrAhora() {
+  const token = getToken();
+  if (!token) { showToast('⚠️ Primero pega tu token de GitHub', 'error'); return; }
+
+  setLoading('btnCorrer', 'spinCorrer', 'lblCorrer', true);
+  showToast('Disparando monitoreo...', 'info');
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/monitor_amazon.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ref: 'main' })
+    });
+
+    if (res.status === 204) {
+      showToast('⚡ Monitoreo iniciado — llega a tu correo en ~5 min', 'success');
+    } else {
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.message || `Error ${res.status}`);
+    }
+  } catch(e) {
+    showToast(`❌ ${e.message}`, 'error');
+    console.error(e);
+  }
+
+  setLoading('btnCorrer', 'spinCorrer', 'lblCorrer', false);
+}
+
+// ─── Cargar estado del último run ─────────────────────────────
+async function cargarEstado() {
+  const token = getToken();
+  const headers = token
+    ? { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
+    : { Accept: 'application/vnd.github.v3+json' };
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/actions/runs?per_page=1`, { headers });
+    if (!res.ok) return;
+    const data = await res.json();
+    const run  = data.workflow_runs?.[0];
+    if (run) {
+      const fecha = new Date(run.updated_at).toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+      const estado = run.conclusion === 'success' ? '✅ Exitoso' : run.status === 'in_progress' ? '🔄 En curso' : '⚠️ ' + (run.conclusion || run.status);
+      document.getElementById('lastRun').textContent = `Último run: ${fecha} — ${estado}`;
+    }
+  } catch(e) { /* sin token público, ignorar */ }
+}
+
+// ─── Footer time ──────────────────────────────────────────────
+function actualizarHora() {
+  const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  document.getElementById('footerTime').textContent = now + ' CDMX';
+}
+
+// ─── Init ─────────────────────────────────────────────────────
+actualizarCron();
+cargarEstado();
+setInterval(actualizarHora, 1000);
+actualizarHora();
+
+// Recargar estado cuando metan el token
+document.getElementById('tokenInput').addEventListener('change', cargarEstado);
+</script>
+</body>
+</html>
