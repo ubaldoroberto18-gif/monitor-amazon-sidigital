@@ -69,8 +69,17 @@ from google import genai
 # Gmail es el puente: aquí llegan las copias reenviadas de las 2
 # cuentas reales de sidigital.com.mx. Estos 2 secrets YA EXISTÍAN
 # desde el Proyecto 1 (el "cartero"), no hay que crear nada nuevo.
-GMAIL_USER = os.environ["GMAIL_USER"]
-GMAIL_PASSWORD = os.environ["GMAIL_PASSWORD"]
+def _limpiar_credencial(valor, quitar_todos_los_espacios=False):
+    """Quita espacios invisibles (como el espacio 'de no separar' que a
+    veces se cuela al copiar una contraseña de aplicación de Google,
+    ej. 'abcd\\xa0efgh\\xa0ijkl\\xa0mnop') que rompen el login IMAP."""
+    if quitar_todos_los_espacios:
+        return re.sub(r"\s+", "", valor)
+    return valor.strip()
+
+
+GMAIL_USER = _limpiar_credencial(os.environ["GMAIL_USER"])
+GMAIL_PASSWORD = _limpiar_credencial(os.environ["GMAIL_PASSWORD"], quitar_todos_los_espacios=True)
 GMAIL_IMAP_HOST = "imap.gmail.com"
 GMAIL_SMTP_HOST = "smtp.gmail.com"
 
