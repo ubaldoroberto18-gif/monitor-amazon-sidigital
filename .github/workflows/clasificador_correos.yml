@@ -25,12 +25,8 @@ jobs:
 
       - name: Ejecutar clasificador
         env:
-          MAIL_USER_PRINCIPAL: ${{ secrets.MAIL_USER_PRINCIPAL }}
-          MAIL_PASS_PRINCIPAL: ${{ secrets.MAIL_PASS_PRINCIPAL }}
-          MAIL_USER_ML: ${{ secrets.MAIL_USER_ML }}
-          MAIL_PASS_ML: ${{ secrets.MAIL_PASS_ML }}
-          MAIL_IMAP_HOST: ${{ secrets.MAIL_IMAP_HOST }}
-          MAIL_SMTP_HOST: ${{ secrets.MAIL_SMTP_HOST }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python clasificador_correos.py
 

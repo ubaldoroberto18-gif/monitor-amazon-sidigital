@@ -5,11 +5,25 @@ clasificador_correos.py
 ========================
 Proyecto 3 — SI Digital: Clasificador Automático de Correos.
 
+VERSIÓN 2 — Lee desde Gmail (vía reenviadores), no desde el servidor
+propio de sidigital.com.mx, porque ese servidor bloquea las conexiones
+que vienen de servidores en la nube como GitHub Actions.
+
+Cómo funciona el puente:
+  roberto.flores@sidigital.com.mx  --(reenviador de cPanel)--> analisissidigital.2026@gmail.com
+  mercado-libre@sidigital.com.mx   --(reenviador de cPanel)--> analisissidigital.2026@gmail.com
+
+Como los dos llegan al mismo Gmail, el script detecta de cuál cuenta
+venía cada correo revisando los encabezados que el reenvío conserva
+(Delivered-To / X-Original-To / To).
+
 Qué hace, en orden:
-  1. Se conecta por IMAP a las 2 bandejas (principal y Mercado Libre).
-  2. Clasifica los correos de la bandeja principal en: Licitaciones,
+  1. Se conecta por IMAP a UNA sola bandeja: analisissidigital.2026@gmail.com.
+  2. Por cada correo, detecta si originalmente era de la cuenta
+     principal o de Mercado Libre (mirando los encabezados).
+  3. Los de la cuenta principal se clasifican en: Licitaciones,
      Clientes/Proveedores, Otros.
-  3. Para los correos de Licitaciones (alertas de licitary.mx / Compras MX):
+  4. Para los de Licitaciones (alertas de licitary.mx / Compras MX):
      - Parsea la tabla que ya viene en el correo (gratis, sin IA).
      - Deduce el Estado a partir del nombre de la unidad compradora.
      - Aplica un filtro barato (palabras clave + estado) para decidir
@@ -18,12 +32,12 @@ Qué hace, en orden:
        pide a Gemini (gemini-3.1-flash-lite) que responda las 8
        preguntas de análisis, en JSON.
      - Agrega o actualiza filas en el Excel de licitaciones.
-  4. Para la bandeja de Mercado Libre: hace un conteo simple por tipo
-     de notificación (pregunta, venta, reclamo, mensaje). ESTO ES
+  5. Los correos de Mercado Libre: conteo simple por tipo de
+     notificación (pregunta, venta, reclamo, mensaje). ESTO ES
      TEMPORAL: en el Paso 4 se reemplaza por la API oficial de
      Mercado Libre, que da datos mucho más completos.
-  5. Arma un solo correo "digest" con todo lo anterior y lo envía por
-     SMTP a roberto.flores@sidigital.com.mx.
+  6. Arma un solo correo "digest" con todo lo anterior y lo envía por
+     Gmail (SMTP) a roberto.flores@sidigital.com.mx.
 
 Todo se configura con variables de entorno (vienen de GitHub Secrets
 cuando corre en GitHub Actions). Nada de contraseñas ni keys en este
@@ -52,18 +66,23 @@ from google import genai
 # CONFIGURACIÓN (todo viene de GitHub Secrets / variables de entorno)
 # ===========================================================
 
-MAIL_IMAP_HOST = os.environ.get("MAIL_IMAP_HOST", "mail.sidigital.com.mx")
-MAIL_SMTP_HOST = os.environ.get("MAIL_SMTP_HOST", "mail.sidigital.com.mx")
+# Gmail es el puente: aquí llegan las copias reenviadas de las 2
+# cuentas reales de sidigital.com.mx. Estos 2 secrets YA EXISTÍAN
+# desde el Proyecto 1 (el "cartero"), no hay que crear nada nuevo.
+GMAIL_USER = os.environ["GMAIL_USER"]
+GMAIL_PASSWORD = os.environ["GMAIL_PASSWORD"]
+GMAIL_IMAP_HOST = "imap.gmail.com"
+GMAIL_SMTP_HOST = "smtp.gmail.com"
 
-MAIL_USER_PRINCIPAL = os.environ["MAIL_USER_PRINCIPAL"]
-MAIL_PASS_PRINCIPAL = os.environ["MAIL_PASS_PRINCIPAL"]
-MAIL_USER_ML = os.environ["MAIL_USER_ML"]
-MAIL_PASS_ML = os.environ["MAIL_PASS_ML"]
+# Las direcciones reales, usadas solo para RECONOCER de dónde venía
+# cada correo reenviado (no para conectarse a ellas).
+CUENTA_PRINCIPAL = "roberto.flores@sidigital.com.mx"
+CUENTA_ML = "mercado-libre@sidigital.com.mx"
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
-# A quién le llega el digest final.
+# A quién le llega el digest final (tu bandeja normal en Outlook).
 DESTINATARIO_DIGEST = os.environ.get("DESTINATARIO_DIGEST", "roberto.flores@sidigital.com.mx")
 
 # Cuántas horas hacia atrás se revisan (por default, 1 día completo).
@@ -138,10 +157,12 @@ def decodificar_encabezado(valor):
     return resultado
 
 
-def conectar_imap(usuario, contrasena):
-    """Abre una conexión IMAP y selecciona la bandeja de entrada."""
-    conexion = imaplib.IMAP4_SSL(MAIL_IMAP_HOST, 993)
-    conexion.login(usuario, contrasena)
+def conectar_gmail():
+    """Abre una conexión IMAP al Gmail 'cartero' y selecciona la
+    bandeja de entrada. Aquí es donde llegan las copias reenviadas
+    de las 2 cuentas reales de sidigital.com.mx."""
+    conexion = imaplib.IMAP4_SSL(GMAIL_IMAP_HOST, 993)
+    conexion.login(GMAIL_USER, GMAIL_PASSWORD)
     conexion.select("INBOX")
     return conexion
 
@@ -200,7 +221,35 @@ def obtener_cuerpo_html_y_texto(mensaje):
 
 
 # ===========================================================
-# PARTE 1 — CLASIFICACIÓN DE LA BANDEJA PRINCIPAL
+# PARTE 0 — DETECTAR DE CUÁL CUENTA VENÍA EL CORREO (NUEVO)
+# ===========================================================
+# Cuando cPanel reenvía un correo, conserva los encabezados originales
+# de "a quién iba dirigido" (aunque el sobre SMTP apunte a Gmail).
+# Buscamos esa dirección original en varios encabezados posibles.
+
+def detectar_cuenta_origen(mensaje):
+    """Devuelve 'principal', 'ml', o 'desconocido' según de cuál
+    cuenta de sidigital.com.mx venía originalmente el correo."""
+    encabezados_a_revisar = ["Delivered-To", "X-Original-To", "To", "Envelope-To"]
+    texto_encabezados = ""
+    for nombre in encabezados_a_revisar:
+        valor = mensaje.get(nombre, "")
+        texto_encabezados += decodificar_encabezado(valor).lower() + " "
+
+    # Como respaldo, también revisamos la cadena "Received" (a veces
+    # ahí queda registrado el destinatario original del reenvío).
+    for valor in mensaje.get_all("Received", []):
+        texto_encabezados += str(valor).lower() + " "
+
+    if CUENTA_PRINCIPAL in texto_encabezados:
+        return "principal"
+    if CUENTA_ML in texto_encabezados:
+        return "ml"
+    return "desconocido"
+
+
+# ===========================================================
+# PARTE 1 — CLASIFICACIÓN DE LOS CORREOS DE LA CUENTA PRINCIPAL
 # ===========================================================
 
 REMITENTES_LICITACIONES = ["licitary.mx", "comprasmx", "compras mx", "alertas@licitary"]
@@ -347,7 +396,6 @@ TEXTO DE LA LICITACIÓN:
 def extraer_texto_pdf(contenido_bytes):
     """Recibe los bytes de un PDF y regresa el texto de todas sus
     páginas, unido en un solo string."""
-    lector = PdfReader.__new__(PdfReader)
     import io
     lector = PdfReader(io.BytesIO(contenido_bytes))
     texto_completo = []
@@ -527,6 +575,11 @@ def armar_html_digest(clientes_proveedores, otros, licitaciones_nuevas, reporte_
 
       <h3>📧 Otros / Informativos</h3>
       <ul>{lista_otros}</ul>
+
+      <p style="color:#888;font-size:11px;margin-top:20px;">
+        Este correo se generó automáticamente leyendo, vía reenvío, tus
+        cuentas roberto.flores@ y mercado-libre@sidigital.com.mx.
+      </p>
     </body></html>
     """
 
@@ -534,14 +587,14 @@ def armar_html_digest(clientes_proveedores, otros, licitaciones_nuevas, reporte_
 def enviar_digest(html):
     mensaje = MIMEMultipart("alternative")
     mensaje["Subject"] = f"📬 Tu resumen de correos — {datetime.now():%d/%m/%Y}"
-    mensaje["From"] = MAIL_USER_PRINCIPAL
+    mensaje["From"] = GMAIL_USER
     mensaje["To"] = DESTINATARIO_DIGEST
     mensaje.attach(MIMEText(html, "html"))
 
     contexto = ssl.create_default_context()
-    with smtplib.SMTP_SSL(MAIL_SMTP_HOST, 465, context=contexto) as servidor:
-        servidor.login(MAIL_USER_PRINCIPAL, MAIL_PASS_PRINCIPAL)
-        servidor.sendmail(MAIL_USER_PRINCIPAL, [DESTINATARIO_DIGEST], mensaje.as_string())
+    with smtplib.SMTP_SSL(GMAIL_SMTP_HOST, 465, context=contexto) as servidor:
+        servidor.login(GMAIL_USER, GMAIL_PASSWORD)
+        servidor.sendmail(GMAIL_USER, [DESTINATARIO_DIGEST], mensaje.as_string())
 
 
 # ===========================================================
@@ -549,15 +602,34 @@ def enviar_digest(html):
 # ===========================================================
 
 def main():
-    log("Iniciando clasificador de correos...")
+    log("Iniciando clasificador de correos (vía Gmail)...")
     cliente_gemini = genai.Client(api_key=GEMINI_API_KEY)
 
-    # --- Bandeja principal ---
-    log("Conectando a la bandeja principal...")
-    imap_principal = conectar_imap(MAIL_USER_PRINCIPAL, MAIL_PASS_PRINCIPAL)
-    correos_principal = buscar_correos_recientes(imap_principal)
-    log(f"  {len(correos_principal)} correos encontrados.")
+    # --- Una sola conexión: al Gmail cartero ---
+    log("Conectando al Gmail cartero...")
+    imap = conectar_gmail()
+    correos = buscar_correos_recientes(imap)
+    imap.logout()
+    log(f"  {len(correos)} correos encontrados en total.")
 
+    # --- Separar por cuenta de origen ---
+    correos_principal, correos_ml, correos_sin_identificar = [], [], []
+    for correo in correos:
+        origen = detectar_cuenta_origen(correo)
+        if origen == "principal":
+            correos_principal.append(correo)
+        elif origen == "ml":
+            correos_ml.append(correo)
+        else:
+            correos_sin_identificar.append(correo)
+
+    if correos_sin_identificar:
+        log(f"  Aviso: {len(correos_sin_identificar)} correos no se pudieron identificar "
+            f"de qué cuenta venían (se ignoran). Revisar encabezados si esto crece mucho.")
+
+    log(f"  {len(correos_principal)} de la cuenta principal, {len(correos_ml)} de Mercado Libre.")
+
+    # --- Clasificación de la cuenta principal ---
     clientes_proveedores, otros, correos_licitaciones = [], [], []
     for correo in correos_principal:
         categoria = clasificar_correo_principal(correo)
@@ -567,7 +639,6 @@ def main():
             clientes_proveedores.append(correo)
         else:
             otros.append(correo)
-    imap_principal.logout()
 
     # --- Parseo de licitaciones + análisis con Gemini ---
     log(f"Procesando {len(correos_licitaciones)} correos de licitaciones...")
@@ -605,11 +676,7 @@ def main():
     libro_excel.save(EXCEL_PATH)
     log(f"Excel actualizado: {EXCEL_PATH} ({len(licitaciones_nuevas)} filas nuevas).")
 
-    # --- Bandeja de Mercado Libre ---
-    log("Conectando a la bandeja de Mercado Libre...")
-    imap_ml = conectar_imap(MAIL_USER_ML, MAIL_PASS_ML)
-    correos_ml = buscar_correos_recientes(imap_ml)
-    imap_ml.logout()
+    # --- Reporte de Mercado Libre ---
     reporte_ml = generar_reporte_ml(correos_ml)
     log(f"  Reporte ML: {reporte_ml[0]}")
 
