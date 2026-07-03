@@ -1,35 +1,25 @@
 name: Clasificador de Correos
-
 on:
   # Botón manual "Run workflow" en GitHub -> para probarlo cuando quieras.
   workflow_dispatch:
-  # Hora fija por ahora (13:00 UTC = 7:00 a.m. CDMX aprox).
-  # En el Paso 5 esto se conecta al panel para que la hora sea ajustable.
-  schedule:
-    - cron: "0 13 * * *"
-
 jobs:
   correr-clasificador:
     runs-on: ubuntu-latest
     steps:
       - name: Descargar el repo
         uses: actions/checkout@v4
-
       - name: Preparar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Instalar dependencias
         run: pip install -r requirements_clasificador.txt
-
       - name: Ejecutar clasificador
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python clasificador_correos.py
-
       - name: Guardar el Excel actualizado
         run: |
           git config user.name "github-actions"
