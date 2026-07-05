@@ -624,6 +624,11 @@ def main():
     # --- Separar por cuenta de origen ---
     correos_principal, correos_ml, correos_sin_identificar = [], [], []
     for correo in correos:
+        asunto = decodificar_encabezado(correo.get("Subject", ""))
+        # ─── GUARDA ANTI-COLISIÓN: ignorar reportes de agentes internos ───
+        PREFIJOS_AGENTES = ("⛽", "🚗", "📊", "🤖")
+        if asunto.strip().startswith(PREFIJOS_AGENTES):
+            continue
         origen = detectar_cuenta_origen(correo)
         if origen == "principal":
             correos_principal.append(correo)
